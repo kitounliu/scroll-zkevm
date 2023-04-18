@@ -1,3 +1,4 @@
+use std::time::Instant;
 use halo2_proofs::poly::commitment::Params;
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
@@ -60,20 +61,25 @@ fn test_aggregation_api() {
     //
     // 2. convert block traces into inner circuit proofs, a.k.a. SNARKs
     //
+    let now = Instant::now();
     let super_circuit_proof = prover
         .create_target_circuit_proof_batch::<SuperCircuit>(block_traces.as_ref(), &mut rng)
         .unwrap();
-
+    log::info!("finish generating proof, elapsed: {:?}", now.elapsed());
     log::info!("build super circuit from block traces");
 
     // sanity check: the inner proof is correct
 
     // 3. build an aggregation circuit proof
+    let now = Instant::now();
     let agg_circuit =
         AggregationCircuit::new(&params_outer, [super_circuit_proof.snark.clone()], &mut rng);
     let pk_outer = gen_pk(&params_outer, &agg_circuit, None);
+    log::info!("finish generating aggregation public parameters, elapsed: {:?}", now.elapsed());
 
     let instances = agg_circuit.instances();
+
+    let now = Instant::now();
     let proof = gen_evm_proof_shplonk(
         &params_outer,
         &pk_outer,
@@ -81,6 +87,7 @@ fn test_aggregation_api() {
         instances.clone(),
         &mut rng,
     );
+    log::info!("finish aggregating proof, elapsed: {:?}, proof size:{:?}", now.elapsed(), proof.len());
     log::info!("finished aggregation generation");
 
     // 4. generate bytecode for evm to verify aggregation circuit proof
@@ -88,6 +95,8 @@ fn test_aggregation_api() {
     log::info!("finished byte code generation");
 
     // 5. validate the proof with evm bytecode
+    let now = Instant::now();
     Verifier::evm_verify(deployment_code, instances, proof);
+    log::info!("finish verifying proof, elapsed: {:?}", now.elapsed());
     log::info!("end to end test completed");
 }
