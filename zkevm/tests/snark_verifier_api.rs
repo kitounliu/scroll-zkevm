@@ -48,6 +48,8 @@ fn test_snark_verifier_sdk_api() {
         .collect::<Vec<_>>();
     println!("finished snark generation");
 
+    let snarks2 = [snarks[2].clone(), snarks[1].clone(), snarks[0].clone()];
+
     let agg_circuit = AggregationCircuit::new(&params_outer, snarks, &mut rng);
     let pk_outer = gen_pk(&params_outer, &agg_circuit, None);
     println!("finished outer pk generation");
@@ -69,7 +71,33 @@ fn test_snark_verifier_sdk_api() {
     );
 
     println!("finished bytecode generation");
-    evm_verify(deployment_code, instances, proof)
+    evm_verify(deployment_code.clone(), instances, proof);
+
+    // second aggregation
+    let agg2_circuit = AggregationCircuit::new(&params_outer, snarks2, &mut rng);
+    let pk2_outer = gen_pk(&params_outer, &agg2_circuit, None);
+    println!("finished outer pk2 generation");
+    let instances2 = agg2_circuit.instances();
+    let proof2 = gen_evm_proof_shplonk(
+        &params_outer,
+        &pk2_outer,
+        agg2_circuit.clone(),
+        instances2.clone(),
+        &mut rng,
+    );
+    println!("finished aggregation generation");
+
+    let deployment2_code = gen_evm_verifier_shplonk::<AggregationCircuit>(
+        &params_outer,
+        pk2_outer.get_vk(),
+        agg2_circuit.num_instance(),
+        None,
+    );
+
+    println!("finished bytecode generation");
+    evm_verify(deployment2_code.clone(), instances2, proof2);
+
+    assert_eq!(deployment2_code, deployment_code)
 }
 
 // A partial integration test.
